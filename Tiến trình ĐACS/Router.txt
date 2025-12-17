@@ -1,0 +1,87 @@
+++++ ROUTER ++++
+
+*** IOU1 ***
+
+configure terminal
+interface Ethernet0/0
+ip address 192.168.10.1 255.255.255.0
+no shutdown
+exit
+
+router rip
+version 2
+no auto-summary
+network 192.168.10.0
+network 192.168.11.0
+
+ip access-list extended ubuntu1
+permit tcp host 192.168.10.111 any eq 22
+
+ip domain-name dacs
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+access-class ubuntu1 in
+login local
+transport input ssh
+exit
+
+do write
+
+*** R1 ***
+
+configure terminal
+interface f0/0
+ip address 192.168.11.2 255.255.255.0
+no shutdown
+exit
+
+router rip
+version 2
+no auto-summary
+network 192.168.11.0
+
+ip access-list extended ubuntu1
+permit tcp host 192.168.10.111 any eq 22
+
+
+enable password 321
+ip domain-name dacs
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+access-class ubuntu1 in
+login local
+transport input ssh
+exit
+
+do write
+
+*** R2 ***
+
+configure terminal
+interface Serial0/0
+ip address 3.0.0.2 255.255.255.252
+no shutdown
+exit
+
+router rip
+version 2
+no auto-summary
+network 3.0.0.0
+
+ip access-list extended ubuntu1
+permit tcp host 192.168.10.111 any eq 22
+
+ip domain-name dacs
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+access-class ubuntu1 in
+login local
+transport input ssh
+exit
+
+do write

@@ -1,0 +1,49 @@
+++++ IOU1 ++++
+conf ter
+int e0/0
+ip add 192.168.10.10 255.255.255.0
+no sh
+ex
+
+ip domain-name dacs
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+login local
+transport input ssh
+exit
+
+++++ IOU2 ++++
+conf ter
+int e0/0
+ip add 192.168.10.20 255.255.255.0
+no sh
+ex
+
+ip domain-name dacs
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+login local
+transport input ssh
+exit
+
+show ip ospf neighbor
+++++ IOU3 ++++
+conf ter
+int e0/0
+no switchport
+ip address 192.168.10.30 255.255.255.0
+no shutdown
+ex
+
+ip domain-name dacs
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+login local
+transport input ssh
+exit

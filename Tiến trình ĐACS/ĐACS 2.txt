@@ -1,0 +1,53 @@
+++++ IOU1 ++++
+conf ter
+int e0/0
+ip add 192.168.10.1 255.255.255.0
+no sh
+ex
+conf ter
+ip domain-name dacs.lab
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+login local
+transport input ssh
+exit
+
+do write
+
+++++ R1 ++++
+conf ter
+int f0/0
+ip add 192.168.11.10 255.255.255.0
+no sh
+ex
+
+ip domain-name dacs.lab
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+login local
+transport input ssh
+exit
+
+do write
+
+++++ R2 ++++
+conf ter
+int s0/0
+ip add 3.0.0.2 255.0.0.0
+no sh
+ex
+
+ip domain-name dacs.lab
+enable password 321
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+login local
+transport input ssh
+exit
+
+do write

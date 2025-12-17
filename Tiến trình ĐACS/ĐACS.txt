@@ -1,0 +1,145 @@
++++ Cấu hình R1 +++
+conf t
+int f0/1
+no sh
+ip add dhcp
+ex
+
+conf t
+int f0/0
+no sh
+ip add 192.168.100.1 255.255.255.0
+ex
+
+ip name-server 8.8.8.8
+ip name-server 203.113.131.1
+ip domain lookup
+
++++ Cấu hình R2 +++
+conf t
+int f0/1
+no sh
+ip add dhcp
+ex
+
+conf t
+int f0/0
+no sh
+ip add 192.168.200.1 255.255.255.0
+ex
+
+ip name-server 8.8.8.8
+ip name-server 203.113.131.1
+ip domain lookup
+
++++ Cấu hình NAT +++
+access-list 1 permit 192.168.80.0 0.0.0.255
+ip nat inside source list 1 interface fastEthernet 0/1 overload
+
+int f0/0
+ip nat inside
+ex
+
+int f0/1
+ip nat outside
+ex
+
+++++ R1 ++++
+hostname Router1
+banner motd "It is Router's Markettings"
+conf ter
+int f0/0
+description VMnet2
+no ip add 192.168.80.1 255.255.255.0
+ip add 192.168.1.1 255.255.255.0
+no sh
+ex
+
+int s0/0
+description 
+ip add 192.168.4.1 255.255.255.0
+no sh
+ex
+
+int s0/1
+description 
+ip add 192.168.6.1 255.255.255.0
+no sh
+ex
+
+++++ R2 ++++
+conf ter
+int f0/0
+ip add 192.168.2.1 255.255.255.0
+no sh
+ex
+
+int s0/0
+ip add 192.168.4.2 255.255.255.0
+no sh
+ex
+
+int s0/1
+ip add 192.168.5.1 255.255.255.0
+no sh
+ex
+
+++++ R3 ++++
+conf ter
+int f0/0
+ip add 192.168.3.1 255.255.255.0
+no sh
+ex
+
+int s0/0
+ip add 192.168.6.2 255.255.255.0
+no sh
+ex
+
+int s0/1
+ip add 192.168.5.2 255.255.255.0
+no sh
+ex
+
++++ Định tuyến +++
+R1
+router rip
+version 2
+no auto-summary
+network 192.168.1.0
+network 192.168.4.0
+network 192.168.6.0
+ex
+
+R2
+router rip
+version 2
+no auto-summary
+network 192.168.2.0
+network 192.168.4.0
+network 192.168.5.0
+ex
+
+R3
+router rip
+version 2
+no auto-summary
+network 192.168.3.0
+network 192.168.6.0
+network 192.168.5.0
+ex
+
+do write
+
+
+ip domain-name lab.local
+crypto key generate rsa modulus 1024
+username admin privilege 15 secret 123
+line vty 0 4
+login local
+transport input ssh
+exit
+
+
+id_ed25519
+id_ed25519.pub

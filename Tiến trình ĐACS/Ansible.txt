@@ -1,0 +1,134 @@
+
+
+++++ Tạo file và nhập thêm router ++++
+sudo nano /etc/ansible/hosts
+
+[routers]
+IOU1 ansible_host=192.168.10.1 ansible_become_password=123
+R1   ansible_host=192.168.11.10 ansible_become_password=123
+R2   ansible_host=3.0.0.2 ansible_become_password=123
+
+[routers:vars]
+ansible_user=admin
+ansible_password=123
+ansible_connection=network_cli
+ansible_network_os=ios
+ansible_become=yes
+ansible_become_method=enable
+
+
+++++ File config ++++++
+nano ~/.ssh/config
+
+Host 192.168.*
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    Ciphers aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+
+++++ Kiểm tra file ++++
+sudo ansible-inventory --list -y
+
+++++ ssh-keygen ++++
+ssh-keyscan -H 192.168.10.30 >> ~/.ssh/known_hosts
+ssh-keygen -R 192.168.10.30
+
+++++ Ping ++++
+ansible all -m ping -u ubuntu
+
+++++ Tạo ssh key ++++
+ssh-keygen -t ed25519
+ls -la
+ls -l .ssh
+
+ssh-copy-id admin@192.168.10.1
+ssh admin@192.168.10.1
+
+ssh-copy-id admin@192.168.10.10
+ssh admin@192.168.10.10
+
+ssh-copy-id admin@192.168.10.20
+ssh admin@192.168.10.20
+
+++++ iou1.yml ++++
+nano iou1.yml
+
+---
+- name: Configure IOU1
+  hosts: iou1
+  gather_facts: no
+
+  tasks:
+    - name: Configure IOU1 e0/0
+      cisco.ios.ios_config:
+        parents:
+          - "interface Ethernet0/0"
+        lines:
+          - ip address 192.168.10.1 255.255.255.0
+          - no shutdown
+
+    - name: Configure IOU1 e0/1
+      cisco.ios.ios_config:
+        parents:
+          - "interface Ethernet0/1"
+        lines:
+          - ip address 192.168.11.1 255.255.255.0
+          - no shutdown
+
+    - name: Configure IOU1 e0/2
+      cisco.ios.ios_config:
+        parents:
+          - "interface Ethernet0/2"
+        lines:
+          - ip address 192.168.12.1 255.255.255.0
+          - no shutdown
+
+    - name: Configure static routes on IOU1
+      cisco.ios.ios_config:
+        lines:
+          - ip route 192.168.1.0 255.255.255.0 192.168.11.10
+          - ip route 192.168.2.0 255.255.255.0 192.168.12.20
+
+ansible-playbook -i /etc/ansible/hosts iou1.yml
+
++++++ File routers.yml ++++++
+nano routers.yml
+
+---
+- name: Configure router interfaces
+  hosts: routers
+  gather_facts: no
+  vars:
+    interfaces:
+      R1:
+        - { name: FastEthernet0/0, ip: 192.168.11.10, mask: 255.255.255.0 }
+        - { name: Serial0/0, ip: 3.0.0.1, mask: 255.0.0.0 }
+        - { name: FastEthernet0/1, ip: 192.168.1.1, mask: 255.255.255.0 }
+
+      R2:
+        - { name: Serial0/0, ip: 3.0.0.2, mask: 255.0.0.0 }
+        - { name: FastEthernet0/0, ip: 192.168.2.1, mask: 255.255.255.0 }
+
+      IOU1:
+        - { name: Ethernet0/1, ip: 192.168.11.1, mask: 255.255.255.0 }
+
+  tasks:
+    - name: Configure interfaces
+      ios_config:
+        lines:
+          - ip address {{ item.ip }} {{ item.mask }}
+          - no shutdown
+        parents: interface {{ item.name }}
+      loop: "{{ interfaces[inventory_hostname] | default([]) }}"
+
+ansible-playbook -i /etc/ansible/hosts routers.yml
+
+++++ Thay đổi chỉ mạng ++++
+ls /etc/netplan/
+sudo nano /etc/netplan/50-cloud-init.yaml
+
+++++ Không liên quan ++++
+[license]
+gns3vm = 73635fd3b0a13ad0;
+
+++++ xóa ssh-keygen +++++
+ssh-keygen -f '/home/ubuntu/.ssh/known_hosts' -R '192.168.10.1'

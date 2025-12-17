@@ -1,0 +1,203 @@
+++++ cấu hình router/switch +++++
+sudo nano /etc/ansible/hosts
+[routers]
+R1   ansible_host=192.168.10.10 ansible_become_password=123
+R2   ansible_host=192.168.10.20 ansible_become_password=123
+R1   ansible_host=192.168.10.30 ansible_become_password=123
+
+[switches]
+IOU1 ansible_host=192.168.10.10 ansible_become_password=123
+IOU2 ansible_host=192.168.10.13 ansible_become_password=123
+IOU3 ansible_host=192.168.10.14 ansible_become_password=123
+
+[all:vars]
+ansible_user=admin
+ansible_password=123
+ansible_connection=network_cli
+ansible_become=yes
+ansible_become_method="enable
+ansible_network_os=ios
+
+++++ File config ++++++
+nano ~/.ssh/config
+
+Host 192.168.10.11
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    Ciphers aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+Host 192.168.10.12
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    Ciphers aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+Host 192.168.10.10
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    Ciphers aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+Host 192.168.10.13
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    Ciphers aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+Host 192.168.10.14
+    KexAlgorithms +diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa
+    Ciphers aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+
+
+++++ Kiểm tra file ++++
+sudo ansible-inventory --list -y
+
+++++ Ping ++++
+ansible all -m ping -u ubuntu
+
+++++ playbook routers ++++
+nano routers.yml
+
+----
+- name: Cấu hình tự động giao diện và OSPF trên 3 Router trong GNS3 (Loại bỏ clock rate)
+  hosts: routers
+  connection: network_cli
+  gather_facts: no
+
+  vars:
+    router_configs:
+      R1:
+        f01_ip: "192.168.1.1 255.255.255.0"
+        serial_interfaces:
+          - { name: "Serial2/2", ip: "1.0.0.1 255.255.255.252", network: "1.0.0.0 0.0.0.3" }
+          - { name: "Serial2/0", ip: "2.0.0.1 255.255.255.252", network: "2.0.0.0 0.0.0.3" }
+        ospf_networks:
+          - "192.168.1.0 0.0.0.255"
+          - "1.0.0.0 0.0.0.3"
+          - "2.0.0.0 0.0.0.3"
+        router_id: "192.168.1.1"
+      
+      R2:
+        f01_ip: "192.168.2.1 255.255.255.0"
+        serial_interfaces:
+          - { name: "Serial2/2", ip: "1.0.0.2 255.255.255.252", network: "1.0.0.0 0.0.0.3" }
+          - { name: "Serial2/1", ip: "3.0.0.2 255.255.255.252", network: "3.0.0.0 0.0.0.3" }
+        ospf_networks:
+          - "192.168.2.0 0.0.0.255"
+          - "1.0.0.0 0.0.0.3"
+          - "3.0.0.0 0.0.0.3"
+        router_id: "192.168.2.1"
+      
+      R3:
+        f01_ip: "192.168.3.1 255.255.255.0"
+        serial_interfaces:
+          - { name: "Serial2/0", ip: "2.0.0.2 255.255.255.252", network: "2.0.0.0 0.0.0.3" }
+          - { name: "Serial2/1", ip: "3.0.0.1 255.255.255.252", network: "3.0.0.0 0.0.0.3" }
+        ospf_networks:
+          - "192.168.3.0 0.0.0.255"
+          - "2.0.0.0 0.0.0.3"
+          - "3.0.0.0 0.0.0.3"
+        router_id: "192.168.3.1"
+
+  tasks:
+    - name: Cấu hình Ethernet0/1 (LAN nội bộ)
+      ios_config:
+        parents:
+          - "interface Ethernet0/1"
+        lines:
+          - "ip address {{ router_configs[inventory_hostname].f01_ip }}"
+          - "no shutdown"
+
+    - name: Cấu hình các giao diện Serial với OSPF type Point-to-Point
+      ios_config:
+        parents:
+          - "interface {{ item.name }}"
+        lines:
+          - "ip address {{ item.ip }}"
+          - "ip ospf network point-to-point"
+          - "no shutdown"
+      loop: "{{ router_configs[inventory_hostname].serial_interfaces }}"
+
+    - name: Cấu hình OSPF router-id
+      ios_config:
+        parents:
+          - "router ospf 1"
+        lines:
+          - "router-id {{ router_configs[inventory_hostname].router_id }}"
+
+    - name: Cấu hình OSPF passive-interface cho LAN (Ethernet0/1)
+      ios_config:
+        parents:
+          - "router ospf 1"
+        lines:
+          - "passive-interface Ethernet0/1"
+
+    - name: Cấu hình OSPF network statements
+      ios_config:
+        parents:
+          - "router ospf 1"
+        lines:
+          - "network {{ item }} area 0"
+      loop: "{{ router_configs[inventory_hostname].ospf_networks }}"
+
+
+ansible-playbook -i /etc/ansible/hosts routers.yml
+
+++++ playbook switches ++++
+nano switches.yml
+
+---
+- name: Configure IOU1 switch (Layer 2)
+  hosts: switches
+  gather_facts: false
+  connection: network_cli
+  tasks:
+    - name: (Only on IOU1) Create VLANs on IOU1
+      ios_config:
+        lines:
+          - vlan 1
+          - name VLAN1
+          - vlan 2
+          - name VLAN2
+      when: inventory_hostname == "IOU1"
+
+    - name: (Only on IOU1) Configure port Ethernet0/1 as access port for VLAN1 (connected to R1)
+      ios_config:
+        parents: ["interface Ethernet0/1"]
+        lines:
+          - "switchport access vlan 1"
+          - "no shutdown"
+      when: inventory_hostname == "IOU1"
+
+    - name: (Only on IOU1) Configure port Ethernet1/0 as access port for VLAN2 (connected to R2)
+      ios_config:
+        parents: ["interface Ethernet1/0"]
+        lines:
+          - "switchport access vlan 2"
+          - "no shutdown"
+      when: inventory_hostname == "IOU1"
+
+- name: Configure IOU2 switch for PC connectivity (VLAN1)
+  hosts: switches
+  gather_facts: false
+  connection: network_cli
+  tasks:
+    - name: (Only on IOU2) Configure port Ethernet0/1 as access port for VLAN1
+      ios_config:
+        parents: ["interface Ethernet0/1"]
+        lines:
+          - "switchport access vlan 1"
+          - "no shutdown"
+      when: inventory_hostname == "IOU2"
+
+- name: Configure IOU3 switch for PC connectivity (VLAN2)
+  hosts: switches
+  gather_facts: false
+  connection: network_cli
+  tasks:
+    - name: (Only on IOU3) Configure port Ethernet0/1 as access port for VLAN2
+      ios_config:
+        parents: ["interface Ethernet0/1"]
+        lines:
+          - "switchport access vlan 2"
+          - "no shutdown"
+      when: inventory_hostname == "IOU3"
+
+ansible-playbook -i /etc/ansible/hosts switches.yml
+
+++++ xóa ssh-keygen +++++
+ssh-keygen -f '/home/ubuntu/.ssh/known_hosts' -R '192.168.10.11'

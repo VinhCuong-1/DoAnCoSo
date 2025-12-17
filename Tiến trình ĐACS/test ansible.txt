@@ -1,0 +1,123 @@
+++++ ROUTER, Ubuntu Server ++++
+IOU1:
+ip route 192.168.2.0 255.255.255.0 192.168.11.10
+ip route 3.0.0.0 255.0.0.0 192.168.11.10
+
+US:
+sudo ip route add 192.168.11.0/24 via 192.168.10.1
+sudo ip route add 192.168.2.0/24 via 192.168.10.1
+sudo ip route add 3.0.0.0/8 via 192.168.10.1
+
+++++ PC ++++
+PC1> ip 192.168.1.2/24 192.168.1.1
+PC2> ip 192.168.2.2/24 192.168.2.1
+
+++++ ANSIBLE ++++
+Bước 1:
+sudo nano /etc/ansible/hosts
+[routers]
+IOU1
+R1
+R2
+
+[routers:vars]
+ansible_connection=local
+enable_password=321
+ansible_password=123
+ansible_python_interpreter=/usr/bin/python3
+
+Bước 2:
+nano routers.yml
+---
+- name: Generate startup-configs for GNS3 routers (offline config)
+  hosts: routers
+  gather_facts: no
+
+  tasks:
+    - name: Generate startup-config
+      ansible.builtin.template:
+        src: templates/startup_config.j2
+        dest: output/{{ inventory_hostname }}.txt
+
+ansible-playbook -i /etc/ansible/hosts routers.yml
+
+Bước 3:
+mkdir -p templates/
+nano templates/startup_config.j2
+
+!
+hostname {{ inventory_hostname }}
+!
+enable secret {{ enable_password }}
+!
+{% if inventory_hostname == 'IOU1' %}
+interface Ethernet0/0
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+interface Ethernet0/1
+ ip address 192.168.11.1 255.255.255.0
+ no shutdown
+ip route 192.168.1.0 255.255.255.0 192.168.11.10
+ip route 192.168.2.0 255.255.255.0 192.168.11.10
+ip route 3.0.0.0 255.0.0.0 192.168.11.10
+
+{% elif inventory_hostname == 'R1' %}
+interface FastEthernet0/0
+ ip address 192.168.11.10 255.255.255.0
+ no shutdown
+interface Serial0/0
+ ip address 3.0.0.1 255.0.0.0
+ no shutdown
+interface FastEthernet0/1
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+router ospf 1
+ network 192.168.11.0 0.0.0.255 area 0
+ network 3.0.0.0 0.255.255.255 area 0
+ network 192.168.1.0 0.0.0.255 area 0
+
+{% elif inventory_hostname == 'R2' %}
+interface Serial0/0
+ ip address 3.0.0.2 255.0.0.0
+ no shutdown
+interface FastEthernet0/1
+ ip address 192.168.2.1 255.255.255.0
+ no shutdown
+router ospf 1
+ network 3.0.0.0 0.255.255.255 area 0
+ network 192.168.2.0 0.0.0.255 area 0
+
+{% endif %}
+!
+end
+
+Bước 4:
+mkdir -p output/
+
+IOU1.txt
+R1.txt
+R2.txt
+
+mv output/R1.txt R1-startup-config.cfg
+mv output/IOU1.txt IOU1-startup-config.cfg
+mv output/R2.txt R2-startup-config.cfg
+
+Bước 5:
+scp ubuntu@192.168.10.111:/home/ubuntu1/R1.cfg D:\Startup-config\
+scp ubuntu@192.168.10.111:/home/ubuntu1/IOU1.cfg D:\Startup-config\
+scp ubuntu@192.168.10.111:/home/ubuntu1/R2.cfg D:\Startup-config\
+
+++++ Ubuntu NAT ++++
+# Bật IP forwarding
+echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# NAT cho dải GNS3 192.168.10.0/24 ra Internet
+sudo iptables -t nat -A POSTROUTING -s 192.168.10.0/24 -o ens33 -j MASQUERADE
+
+# (Tùy hệ thống, có thể thay ens33 bằng card kết nối Internet thật)
+ip addr show   # để xác định interface đang kết nối Internet
+
+# Lưu iptables nếu muốn giữ sau reboot:
+sudo apt install iptables-persistent
+sudo netfilter-persistent save
